@@ -22,7 +22,7 @@ class CelesteGame(App):
 
     def on_update(self, dt: float):
         # Controlle de Madeline
-        idx = self.ecs.sparse[self.player]
+        idx = self.ecs.index_of(self.player)
         vel = self.ecs.components["Velocity"]
 
         if self.inputs.just_pressed("Space"):

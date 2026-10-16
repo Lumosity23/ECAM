@@ -13,7 +13,7 @@ class Game_test(App):
 
     def on_update(self, dt: float):
         # Récupère la vitesse du joueur
-        idx = self.ecs.sparse[self.player]
+        idx = self.ecs.index_of(self.player)
         vel = self.ecs.components["Velocity"]
 
         # Contrôles clavier intuitifs :

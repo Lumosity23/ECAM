@@ -116,8 +116,8 @@ class CollisionSystem(System):
         self, entity_id: EntityID, target_layer: int | None = None
     ) -> list[EntityID]:
         """Retourne la liste des entités qui touchent l'entité donnée (vectorisé en NumPy)."""
-        idx = self.registry.sparse[entity_id]
-        if idx == -1 or idx >= self.registry.count:
+        idx = self.registry.index_of(entity_id)  # -1 si l'entité est morte
+        if idx == -1:
             return []
 
         count = self.registry.count
@@ -146,4 +146,4 @@ class CollisionSystem(System):
 
         # Récupération des IDs stables grâce au tableau dense
         valid_dense_indices = np.where(colliding)[0]
-        return [self.registry.dense[i] for i in valid_dense_indices]
+        return [self.registry.entity_at(i) for i in valid_dense_indices]
