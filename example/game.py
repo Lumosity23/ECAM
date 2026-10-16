@@ -1,17 +1,28 @@
 import pygame as pg
 import numpy as np
-from registry import Registry
-from Systems.camera import Camera2D
-# from .manager.InputManager import InputManager
-from Systems.PhysicsSystem import PhysicsSystem, CollisionSystem
-from Systems.RenderSystem import RenderSystem, ShowGrid
+import moderngl as mgl
+from ecam import Registry
+from ecam import PhysicsSystem, CollisionSystem
+from ecam import Camera2D
+from ecam import RenderSystem, ShowGrid
+import ctypes
+import platform
 
+
+if platform.system() == "Windows":
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception as e:
+        # Option de secours pour les versions plus anciennes de Windows
+        ctypes.windll.user32.SetProcessDPIAware()
+        
 
 class Game:
 
     def __init__(self):
         pg.init()
         pg.font.init()
+        # self.cxt = mgl.create_context()
         self.ecs = Registry()
         self._running = True
         self._display_surf = None
@@ -29,7 +40,7 @@ class Game:
 
         # Init des composante de base de pygame
         self._display_surf = pg.display.set_mode(
-            self.size, pg.HWSURFACE | pg.DOUBLEBUF
+            self.size, pg.HWSURFACE | pg.DOUBLEBUF   # pg.OPENGL
         )
         pg.display.set_caption("ECAM") # Entity Component Architecture Modular  ( Ca veux rien dire mais c'est drole car c'est le nom de mon ecole superieur )
                                        # ^      ^         ^            ^
@@ -97,6 +108,11 @@ class Game:
             self.on_loop(dt)
 
             self.on_render()
-            pg.display.set_caption(f"Nombre d'entities : {self.ecs.count} | FPS : {self.clock.get_fps():2f}")
+            pg.display.set_caption(f"Nombre d'entities : {self.ecs.count} | FPS : {int(self.clock.get_fps())}")
 
         self.on_cleanup()
+
+
+if __name__ == "__main__" :
+    theApp = Game()
+    theApp.on_execute()
