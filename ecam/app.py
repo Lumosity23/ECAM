@@ -88,9 +88,9 @@ class App:
         return eid
     
 
-    def add_system(self, system: System) -> System:
+    def add_system(self, system: System, stage: str = "update") -> System:
         """Permet à l'utilisateur d'ajouter un système dans la boucle automatique."""
-        return self.ecs.add_system(system)
+        return self.ecs.add_system(system, stage)
     
 
     def draw_line(
@@ -129,6 +129,9 @@ class App:
 
         # B. Gameplay de l'utilisateur
         self.on_update(dt)
+
+        # B'. Les despawn demandés dans on_update s'exécutent ici, hors de toute itération
+        self.ecs.commands.apply()
 
         # C. Rendu WebGPU
         encoder = self.device.create_command_encoder()

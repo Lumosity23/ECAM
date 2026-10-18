@@ -5,7 +5,13 @@ from .types import (
     make_entity, slot_of, generation_of,
 )
 from .system import System
+from .commands import Commands
 from typing import Any
+
+# Étages par défaut d'une frame, dans l'ordre d'exécution.
+# Un système sans précision va dans "update". On pourra en insérer d'autres
+# (ex : les étages de l'UI) avec Registry.add_stage.
+DEFAULT_STAGES = ("input", "update", "post_update")
 
 # Les signatures sont des uint64 : 1 bit par composant (ou tag) => 64 maximum.
 # (Si un jour ça ne suffit plus : passer à une matrice (N, K) de mots uint64.)
@@ -40,7 +46,15 @@ class Registry:
         self.components: dict[str, np.ndarray] = {}
         self.masks: dict[str, np.uint64] = {}   # contient les composants ET les tags
 
-        self.systems: list[System] = []
+        # --- Organisation de la frame ---
+        self.stages: list[str] = list(DEFAULT_STAGES)               # ordre d'exécution
+        self.systems: dict[str, list[System]] = {s: [] for s in self.stages}
+
+        # Singletons du monde (voir la section RESSOURCES) : un objet par type.
+        self.resources: dict[type, Any] = {}
+
+        # Demandes différées (despawn...) exécutées entre deux étages.
+        self.commands = Commands(self)
 
 
     def _get_array_zeros(self, type, shape: tuple = ()) -> np.ndarray:
@@ -243,25 +257,90 @@ class Registry:
     # ------------------------------------------------------------------
     # SYSTÈMES
     # ------------------------------------------------------------------
-    def add_system(self, system: System) -> System:
-        """ Add a system to the register """
-        self.systems.append(system)
+    def add_stage(self, name: str, *, after: str | None = None, before: str | None = None) -> None:
+        """
+        Crée un nouvel étage, placé juste après `after` ou juste avant `before`
+        (à la fin si on ne précise rien). Exemple : add_stage("ui_layout", after="update").
+        """
+        # --- À TOI DE JOUER (2/4) -------------------------------------------
+        # self.stages est une liste de noms : l'ORDRE de la liste est l'ordre
+        # d'exécution. Il faut :
+        #   1. refuser un nom qui existe déjà (ValueError)
+        #   2. refuser after ET before donnés en même temps (ValueError)
+        #   3. calculer la position d'insertion :
+        #        after  -> self.stages.index(after) + 1
+        #        before -> self.stages.index(before)
+        #        rien   -> len(self.stages)
+        #      (index() lève déjà une ValueError si le nom n'existe pas : parfait)
+        #   4. self.stages.insert(position, name)
+        #   5. ne pas oublier de créer la liste de systèmes de ce nouvel étage :
+        #        self.systems[name] = []
+        raise NotImplementedError("add_stage : à implémenter (voir le commentaire)")
+
+
+    def add_system(self, system: System, stage: str = "update") -> System:
+        """ Add a system to the register, in the given stage """
+        if stage not in self.systems:
+            raise ValueError(f"[ERROR] Stage '{stage}' does not exist! Known stages: {self.stages}")
+        self.systems[stage].append(system)
         return system
 
 
     def update_systems(self, dt) -> None:
-        """ Call the update methode of all systems enabled """
-        for system in self.systems:
-            if system.enabled:
-                system.update(dt)
+        """ Call the update methode of all systems enabled, stage after stage """
+        for stage in self.stages:
+            for system in self.systems[stage]:
+                if system.enabled:
+                    system.update(dt)
+
+            # Fin d'étage : plus aucun système n'itère, c'est le moment SÛR pour
+            # exécuter les despawn demandés pendant cet étage.
+            self.commands.apply()
 
 
     def get_system[T: System](self, system_type: type[T]) -> T | None:
         """ Get a systems register with the name """
-        for system in self.systems:
-            if isinstance(system, system_type):
-                return system
+        for stage in self.stages:
+            for system in self.systems[stage]:
+                if isinstance(system, system_type):
+                    return system
         return None
+
+
+    # ------------------------------------------------------------------
+    # RESSOURCES : des singletons du monde
+    # ------------------------------------------------------------------
+    # Une ressource est un objet UNIQUE auquel tous les systèmes ont accès, et qui
+    # n'appartient à aucune entité : l'état de la souris, le thème de l'UI, la
+    # taille de l'écran... On la retrouve par son TYPE (comme get_system).
+    def insert_resource[T](self, resource: T) -> T:
+        """ Enregistre une ressource. Une ressource du même type est remplacée. """
+        self.resources[type(resource)] = resource
+        return resource
+
+
+    def has_resource(self, resource_type: type) -> bool:
+        """ Vrai si une ressource de ce type est enregistrée. """
+        return resource_type in self.resources
+
+
+    def get_resource[T](self, resource_type: type[T]) -> T:
+        """ Retourne la ressource de ce type. Lève KeyError si elle n'existe pas. """
+        # --- À TOI DE JOUER (3/4) -------------------------------------------
+        # Regarde insert_resource : la clé du dictionnaire est le type.
+        # Contrairement à get_system (qui renvoie None), une ressource absente est
+        # presque toujours un oubli d'initialisation : on préfère PLANTER avec un
+        # message clair plutôt que de propager un None qui explosera plus loin.
+        # Lève une KeyError dont le message contient le nom du type
+        # (resource_type.__name__).
+        raise NotImplementedError("get_resource : à implémenter (voir le commentaire)")
+
+
+    def remove_resource[T](self, resource_type: type[T]) -> T | None:
+        """ Retire la ressource de ce type et la renvoie (None si elle n'existait pas). """
+        # --- À TOI DE JOUER (4/4) -------------------------------------------
+        # Une seule ligne avec dict.pop et une valeur par défaut.
+        raise NotImplementedError("remove_resource : à implémenter (voir le commentaire)")
 
 
     # ------------------------------------------------------------------
