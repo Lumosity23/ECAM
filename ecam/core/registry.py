@@ -167,11 +167,7 @@ class Registry:
         Register a tag : un composant SANS donnée, juste un bit dans la signature.
         Exemples d'usage plus tard : "Node" (fait partie de l'UI), "Hidden"...
         """
-        # --- À TOI DE JOUER (1/3) -------------------------------------------
-        # Regarde register_component juste au-dessus : un tag, c'est pareil,
-        # sauf qu'on ne crée PAS de tableau dans self.components.
-        # Indice : une seule ligne suffit, avec la méthode _alloc_mask.
-        raise NotImplementedError("register_tag : à implémenter (voir le commentaire)")
+        self._alloc_mask(name)
 
 
     def add_component(self, eid: EntityID, *bundle) -> None:
@@ -205,9 +201,6 @@ class Registry:
             if name not in self.masks:
                 raise ValueError(f"[ERROR] Component '{name}' does not exist!")
 
-            # ATTENTION : pour éteindre un bit on fait  sig & (~mask).
-            # Ça ne marche que si mask est un np.uint64 : avec un int Python,
-            # ~mask serait négatif et numpy refuserait de le mélanger à de l'uint64.
             self.signatures[index] &= ~self.masks[name]
 
             # Un composant objet : on lâche la référence pour que Python libère l'objet.
@@ -217,14 +210,14 @@ class Registry:
 
     def has_component(self, eid: EntityID, name: str) -> bool:
         """ Vrai si l'entité (vivante) possède ce composant ou ce tag. """
-        # --- À TOI DE JOUER (2/3) -------------------------------------------
-        # 1. Retrouve l'index de l'entité (méthode index_of). Si elle est morte
-        #    (-1), la réponse est False.
-        # 2. Vérifie que `name` existe dans self.masks (sinon : ValueError,
-        #    comme dans add_component).
-        # 3. Teste le bit :  (self.signatures[index] & self.masks[name]) != 0
-        #    Pense à renvoyer un vrai bool Python : bool(...)
-        raise NotImplementedError("has_component : à implémenter (voir le commentaire)")
+        index = self.index_of(eid)
+        if index == -1:
+            return False
+        
+        if name not in self.masks:
+            raise ValueError(f"[ERROR] Component '{name}' does not exist!")
+
+        return bool((self.signatures[index] & self.masks[name]) != 0)
 
 
     def get_component(self, eid: EntityID, name: str):
@@ -233,12 +226,14 @@ class Registry:
         Pour un composant de forme (2,) on récupère une VUE : modifier le résultat
         modifie le tableau (c'est voulu, c'est le même principe que `view`).
         """
-        # --- À TOI DE JOUER (3/3) -------------------------------------------
-        # Même début que has_component. Si l'entité n'a pas le composant,
-        # lève une ValueError. Sinon renvoie self.components[name][index].
-        # Réfléchis : que faut-il faire pour un tag (pas de tableau) ?
-        raise NotImplementedError("get_component : à implémenter (voir le commentaire)")
+        index = self.index_of(eid)
 
+        if not self.has_component(eid, name):
+            raise ValueError(f"[ERROR] Entity {eid} does not have this component : {name}")
+        
+        # Réfléchis : que faut-il faire pour un tag (pas de tableau) ?
+        return self.components[name][index]
+    
 
     def is_component_exist(self, component_name: str) -> bool:
         """ Un composant OU un tag enregistré. """
