@@ -26,7 +26,9 @@ marquées « À TOI DE JOUER », un test te dit si c'est bon, un commit par leç
 | 10 | Score et vies sans texte, niveaux en JSON, meilleur score sauvegardé | sauvegarde | oui |
 | 11 | Bilan : mesurer, et savoir quand l'objet vaut mieux | réflexion écrite | non |
 
-**Jeu fil rouge : à décider avant la leçon 6.**
+**Jeu fil rouge : casse-briques (Breakout), rectangles unis.**
+
+Choix volontaire : le Frogger du projet noté est développé séparément, en pygame et pygame_gui, sans lien avec ce cours. Un Frogger en ECAM pourra venir après la défense.
 
 ## Leçons faites
 
