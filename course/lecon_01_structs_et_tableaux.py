@@ -24,6 +24,7 @@ On va stocker ces N particules de TROIS façons et comparer :
 Ton travail : écrire les parties 2 et 3 (4 petites fonctions). La partie 1 est
 écrite en entier : elle te montre le modèle à suivre.
 """
+
 from dataclasses import dataclass
 from time import perf_counter
 
@@ -40,8 +41,11 @@ STEPS = 10  # nombre de pas de simulation dans chaque mesure
 # (c'est le point le plus important de la leçon : se tromper est utile)
 #
 #   Pour N = 200 000, je pense que :
-#     - SoA va être  ___ fois plus rapide / lent que AoS parce que ...
-#     - le tableau structuré va être ...
+#     - SoA va être  100 fois plus rapide que AoS parce que : pour realiser une boucle d'operation sur un tyhpe de donne
+#       si on a directmeent le tableua de donne de tout le monde ca fit directement dans le cache du processeur alors que
+#       si on a des structure on va devoir pourchacun aller cherche l'info qu'il nous faut et donc ne pas pouvoir tout mettre dans
+#       le cache du process et donc faire plusieur appel memoire et donc perdre bcp de temps
+#     - le tableau structuré va être bcp plus lent du au raison ennoecer plus haut
 # ----------------------------------------------------------------------
 
 
@@ -51,7 +55,7 @@ STEPS = 10  # nombre de pas de simulation dans chaque mesure
 # nous permet de vérifier qu'elles calculent la même chose.
 # ----------------------------------------------------------------------
 def initial_state(n: int):
-    """ Renvoie quatre tableaux numpy float32 de taille n : x, y, vx, vy. """
+    """Renvoie quatre tableaux numpy float32 de taille n : x, y, vx, vy."""
     rng = np.random.default_rng(42)
     x = rng.uniform(0, 1280, n).astype(np.float32)
     y = rng.uniform(0, 720, n).astype(np.float32)
@@ -76,14 +80,17 @@ class Particle:
 
 
 def make_aos(n: int) -> list[Particle]:
-    """ Construit la liste de n particules. """
+    """Construit la liste de n particules."""
     x, y, vx, vy = initial_state(n)
     # .tolist() convertit en vrais float Python (valeurs identiques)
-    return [Particle(*champs) for champs in zip(x.tolist(), y.tolist(), vx.tolist(), vy.tolist())]
+    return [
+        Particle(*champs)
+        for champs in zip(x.tolist(), y.tolist(), vx.tolist(), vy.tolist())
+    ]
 
 
 def step_aos(particles: list[Particle], dt: float) -> None:
-    """ Fait avancer toutes les particules, UNE PAR UNE. """
+    """Fait avancer toutes les particules, UNE PAR UNE."""
     for p in particles:
         p.x += p.vx * dt
         p.y += p.vy * dt
@@ -95,21 +102,23 @@ def step_aos(particles: list[Particle], dt: float) -> None:
 # CONTRAT : la structure est un simple dict {"x": tableau, "y": ..., "vx": ..., "vy": ...}
 # Pas de classe : un dict est notre "struct de tableaux".
 def make_soa(n: int) -> dict[str, np.ndarray]:
-    """ Construit le dict de 4 tableaux numpy (float32, taille n). """
-    # --- À TOI DE JOUER --------------------------------------------------
-    # 1. Récupère les 4 tableaux avec initial_state(n).
-    # 2. Renvoie-les dans un dict avec les clés "x", "y", "vx", "vy".
-    raise NotImplementedError("make_soa : à implémenter")
+    """Construit le dict de 4 tableaux numpy (float32, taille n)."""
+    struct: dict[str, np.ndarray] = {}
+    for array, sym in zip(initial_state(n), ["x", "y", "vx", "vy"]):
+        struct[sym] = array
+
+    return struct
 
 
 def step_soa(p: dict[str, np.ndarray], dt: float) -> None:
-    """ Fait avancer TOUTES les particules en deux lignes, sans boucle Python. """
+    """Fait avancer TOUTES les particules en deux lignes, sans boucle Python."""
     # --- À TOI DE JOUER --------------------------------------------------
     # Compare avec step_aos : il n'y a plus de `for`. Une opération numpy agit
     # sur tout le tableau d'un coup. Attention : il faut MODIFIER les tableaux
     # en place (opérateur +=), pas en créer de nouveaux, sinon l'appelant ne
     # verrait rien changer.
-    raise NotImplementedError("step_soa : à implémenter")
+    p["x"] += p["vx"] * dt
+    p["y"] += p["vy"] * dt
 
 
 # ======================================================================
@@ -117,22 +126,33 @@ def step_soa(p: dict[str, np.ndarray], dt: float) -> None:
 # ======================================================================
 # CONTRAT : un seul np.ndarray dont les cases ont les champs "x", "y", "vx", "vy"
 def make_structured(n: int) -> np.ndarray:
-    """ Construit UN tableau de n enregistrements (x, y, vx, vy) en float32. """
+    """Construit UN tableau de n enregistrements (x, y, vx, vy) en float32."""
     # --- À TOI DE JOUER --------------------------------------------------
     # 1. Décris la struct :
     #       dtype = np.dtype([("x", np.float32), ("y", np.float32), ...])
     #    (c'est littéralement la déclaration d'une struct C)
     # 2. Crée le tableau :  np.empty(n, dtype=dtype)
     # 3. Remplis chaque champ : tableau["x"] = ...   (avec initial_state)
-    raise NotImplementedError("make_structured : à implémenter")
+    dtype = np.dtype(
+        [("x", np.float32), ("y", np.float32), ("vx", np.float32), ("vy", np.float32)]
+    )
+    tableau = np.empty(n, dtype=dtype)
+    x, y, vx, vy = initial_state(n)
+    tableau["x"] = x
+    tableau["y"] = y
+    tableau["vx"] = vx
+    tableau["vy"] = vy
+
+    return tableau
 
 
 def step_structured(records: np.ndarray, dt: float) -> None:
-    """ Même calcul, sur le tableau d'enregistrements. """
+    """Même calcul, sur le tableau d'enregistrements."""
     # --- À TOI DE JOUER --------------------------------------------------
     # records["x"] donne une VUE sur le champ x de tous les enregistrements.
     # Le calcul ressemble beaucoup à step_soa.
-    raise NotImplementedError("step_structured : à implémenter")
+    records["x"] += records["vx"] * dt
+    records["y"] += records["vy"] * dt
 
 
 # ======================================================================
@@ -152,14 +172,14 @@ def positions_structured(records):
 
 # Pour chaque version : (nom, fabrique, pas de simulation, extracteur de positions)
 VERSIONS = [
-    ("AoS (liste)",       make_aos,        step_aos,        positions_aos),
-    ("SoA (dict)",        make_soa,        step_soa,        positions_soa),
-    ("Struct numpy",      make_structured, step_structured, positions_structured),
+    ("AoS (liste)", make_aos, step_aos, positions_aos),
+    ("SoA (dict)", make_soa, step_soa, positions_soa),
+    ("Struct numpy", make_structured, step_structured, positions_structured),
 ]
 
 
 def best_time(make, step, n: int, repeats: int = 3) -> float:
-    """ Meilleur temps (en ms) pour STEPS pas de simulation. Le minimum limite le bruit. """
+    """Meilleur temps (en ms) pour STEPS pas de simulation. Le minimum limite le bruit."""
     data = make(n)
     essais = []
     for _ in range(repeats):
@@ -171,7 +191,7 @@ def best_time(make, step, n: int, repeats: int = 3) -> float:
 
 
 def check_same_result(n: int = 500) -> dict[str, bool]:
-    """ Les trois versions doivent calculer les mêmes positions (à float32 près). """
+    """Les trois versions doivent calculer les mêmes positions (à float32 près)."""
     # On prend AoS comme référence : sa partie est écrite pour toi.
     reference = make_aos(n)
     for _ in range(STEPS):
@@ -193,10 +213,16 @@ def check_same_result(n: int = 500) -> dict[str, bool]:
 def main() -> None:
     print("=== 1. CORRECTION : les trois versions calculent-elles pareil ?")
     for nom, ok in check_same_result().items():
-        etat = "A FAIRE" if ok is None else ("OK" if ok else "ECHEC (résultat différent)")
+        etat = (
+            "A FAIRE" if ok is None else ("OK" if ok else "ECHEC (résultat différent)")
+        )
         print(f"  {etat:<28} {nom}")
 
-    print("\n=== 2. VITESSE : meilleur temps pour", STEPS, "pas (en ms, plus petit = mieux)")
+    print(
+        "\n=== 2. VITESSE : meilleur temps pour",
+        STEPS,
+        "pas (en ms, plus petit = mieux)",
+    )
     print(f"  {'':<14}" + "".join(f"{n:>14,}" for n in (N_SMALL, N_BIG)))
     temps = {}
     for nom, make, step, _ in VERSIONS:
@@ -207,7 +233,10 @@ def main() -> None:
             except NotImplementedError:
                 ligne.append(None)
         temps[nom] = ligne
-        print(f"  {nom:<14}" + "".join(f"{'à faire':>14}" if t is None else f"{t:>14.2f}" for t in ligne))
+        print(
+            f"  {nom:<14}"
+            + "".join(f"{'à faire':>14}" if t is None else f"{t:>14.2f}" for t in ligne)
+        )
 
     base = temps["AoS (liste)"]
     print("\n=== 3. ACCÉLÉRATION par rapport à AoS")
@@ -217,7 +246,9 @@ def main() -> None:
         rapports = [f"x{base[i] / ligne[i]:.0f}" for i in range(2)]
         print(f"  {nom:<14}" + "".join(f"{r:>14}" for r in rapports))
 
-    print("\nRelis ta prédiction. Où t'es-tu trompé ? Réponds aux questions ci-dessous.")
+    print(
+        "\nRelis ta prédiction. Où t'es-tu trompé ? Réponds aux questions ci-dessous."
+    )
 
 
 if __name__ == "__main__":
