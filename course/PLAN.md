@@ -32,4 +32,5 @@ Choix volontaire : le Frogger du projet noté est développé séparément, en p
 
 ## Leçons faites
 
-- [ ] Leçon 1 : `course/lecon_01_structs_et_tableaux.py`
+- [x] Leçon 1 : `course/lecon_01_structs_et_tableaux.py`
+- [ ] Leçon 2 : `course/lecon_02_classe_vers_donnees.py`
