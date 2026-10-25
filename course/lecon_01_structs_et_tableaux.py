@@ -30,8 +30,8 @@ from time import perf_counter
 
 import numpy as np
 
-N_SMALL = 1_000
-N_BIG = 200_000
+N_SMALL = 10_000
+N_BIG = 2_000_000
 DT = 0.016
 STEPS = 10  # nombre de pas de simulation dans chaque mesure
 
@@ -97,26 +97,15 @@ def step_aos(particles: list[Particle], dt: float) -> None:
 
 
 # ======================================================================
-# PARTIE 2 : SoA, un tableau par champ     (À TOI DE JOUER 1/2)
+# PARTIE 2 : SoA, un tableau par champ
 # ======================================================================
-# CONTRAT : la structure est un simple dict {"x": tableau, "y": ..., "vx": ..., "vy": ...}
-# Pas de classe : un dict est notre "struct de tableaux".
 def make_soa(n: int) -> dict[str, np.ndarray]:
     """Construit le dict de 4 tableaux numpy (float32, taille n)."""
-    struct: dict[str, np.ndarray] = {}
-    for array, sym in zip(initial_state(n), ["x", "y", "vx", "vy"]):
-        struct[sym] = array
-
-    return struct
+    return dict(zip(["x", "y", "vx", "vy"], initial_state(n)))
 
 
 def step_soa(p: dict[str, np.ndarray], dt: float) -> None:
     """Fait avancer TOUTES les particules en deux lignes, sans boucle Python."""
-    # --- À TOI DE JOUER --------------------------------------------------
-    # Compare avec step_aos : il n'y a plus de `for`. Une opération numpy agit
-    # sur tout le tableau d'un coup. Attention : il faut MODIFIER les tableaux
-    # en place (opérateur +=), pas en créer de nouveaux, sinon l'appelant ne
-    # verrait rien changer.
     p["x"] += p["vx"] * dt
     p["y"] += p["vy"] * dt
 
@@ -124,15 +113,8 @@ def step_soa(p: dict[str, np.ndarray], dt: float) -> None:
 # ======================================================================
 # PARTIE 3 : tableau structuré numpy        (À TOI DE JOUER 2/2)
 # ======================================================================
-# CONTRAT : un seul np.ndarray dont les cases ont les champs "x", "y", "vx", "vy"
 def make_structured(n: int) -> np.ndarray:
     """Construit UN tableau de n enregistrements (x, y, vx, vy) en float32."""
-    # --- À TOI DE JOUER --------------------------------------------------
-    # 1. Décris la struct :
-    #       dtype = np.dtype([("x", np.float32), ("y", np.float32), ...])
-    #    (c'est littéralement la déclaration d'une struct C)
-    # 2. Crée le tableau :  np.empty(n, dtype=dtype)
-    # 3. Remplis chaque champ : tableau["x"] = ...   (avec initial_state)
     dtype = np.dtype(
         [("x", np.float32), ("y", np.float32), ("vx", np.float32), ("vy", np.float32)]
     )
@@ -148,9 +130,6 @@ def make_structured(n: int) -> np.ndarray:
 
 def step_structured(records: np.ndarray, dt: float) -> None:
     """Même calcul, sur le tableau d'enregistrements."""
-    # --- À TOI DE JOUER --------------------------------------------------
-    # records["x"] donne une VUE sur le champ x de tous les enregistrements.
-    # Le calcul ressemble beaucoup à step_soa.
     records["x"] += records["vx"] * dt
     records["y"] += records["vy"] * dt
 
@@ -262,17 +241,34 @@ if __name__ == "__main__":
 #     pour N = 200 000 ? (indice : combien coûte UN appel à numpy, même
 #     pour un tableau minuscule ?)
 #
+#       comme la quantite de particule est enore negligablea le plus grand temps passer est celui des appel et non
+#       celui du calcul pure et donc pour 200_000 entites la le calcule prime
+#
 # Q2. step_aos fait la MÊME chose que step_soa, mais est bien plus lent.
 #     Qui exécute la boucle dans chaque cas : Python ou du code C ?
+#
+#       dans l'un on a fais un .tolist() qui fais perder tout les performance de numpy et on retombe sur une boucle for
+#       classique python -> aos ( on a une liste de struture python )
+#       et pout SOA -> on a un dico python qui contient de array de numpy donc tout les operation sont faitre cote numpy et
+#       cote python on reste toujours super rapide avec notre O(1) grace au dico
 #
 # Q3. Le tableau structuré range les 4 champs d'une particule côte à côte en
 #     mémoire (x,y,vx,vy,x,y,vx,vy,...) alors que le SoA range tous les x
 #     ensemble. Pour le calcul `x += vx*dt`, laquelle de ces deux dispositions
 #     te semble la plus favorable, et pourquoi ? Le résultat mesuré confirme-t-il ?
 #
+#       car comme ca on peux lire tout les valuer d'une meme propriete en meme temps et donc pour un calcul simple
+#       'x += vx * dt' on n'as qu'as load en cache l'array 'x' et 'vx' et c'est tout alors que pour l'autre on va devoir laod chacune
+#       des struct pour aller cherche les valuer de x et vx donc bcp plus d'appel memoire pour le meme travaille ( et le procs il n'aime pas les appel memoire )
+#
+#
 # Q4. Dans ton Registry, "Transform" a la forme (N, 2) : un tableau par
 #     composant. Est-ce plutôt du SoA ou de l'AoS ? Et à l'intérieur de
 #     Transform (x et y d'une même entité côte à côte) ?
+#
+#       je dirai que c'est une SoA car on a notre struct "Transform" qui contient deux tableau chacun pour une valeur : 'x' et 'y'
+#       et donc non elle ne sont pas cote a cote mais on le meme index ( dense ) pour que on puisse avec une seul ID retrouver tout ce qu'on veux
+#       d'une entity ( le but d'un ECS )
 #
 # ----------------------------------------------------------------------
 # ANNEXE : pourquoi `slots=True` ?
